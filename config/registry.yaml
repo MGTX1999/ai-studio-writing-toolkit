@@ -1,0 +1,276 @@
+# ============================================================
+# registry.yaml —— 技能/专家/工具登记表
+#
+# 说明：
+# - skills / experts 的 enabled 供平台侧的编排与主控技能读取（本仓库的
+#   MCP 服务不解析本文件，不按它过滤工具）。
+# - mcp.tools 是**登记与漂移校验清单**：scripts/check_config.py 会把它与
+#   server.py --list-tools 的实际工具集合比对。它不是运行时过滤器。
+# - mcp.data_dir / profiles_dir 仅为说明；实际以环境变量
+#   LONGFORM_DATA_DIR / LONGFORM_PROFILES_DIR 为准。
+# - 末尾的 settings / llm / kb / ima / 摘要与状态工具同样只是登记，
+#   不改变上面的语义：运行时仍全部暴露。
+# ============================================================
+
+version: 1
+
+skills:
+  - name: longform-orchestrator
+    path: skills/longform-orchestrator/SKILL.md
+    enabled: true
+    role: entry          # 入口技能，建议始终启用
+    note: 主控编排，负责决定下一步调用谁
+
+  - name: project-bootstrap
+    path: skills/project-bootstrap/SKILL.md
+    enabled: true
+    role: setup
+    note: 立项、设定档初始化、文风档案建立
+
+  - name: outline-architect
+    path: skills/outline-architect/SKILL.md
+    enabled: true
+    role: planning
+    note: 四级大纲流水线：总纲要 → 卷纲要 → 章纲要 → 交棒正文
+
+  - name: chapter-writer
+    path: skills/chapter-writer/SKILL.md
+    enabled: true
+    role: production
+    note: 输入包驱动的逐章扩写
+
+  - name: consistency-auditor
+    path: skills/consistency-auditor/SKILL.md
+    enabled: true
+    role: qa
+    note: 人设/时间线/伏笔一致性审计
+
+  - name: style-voice-keeper
+    path: skills/style-voice-keeper/SKILL.md
+    enabled: true
+    role: qa
+    note: 文风与声线统一性维护
+
+  - name: fact-copyright-guard
+    path: skills/fact-copyright-guard/SKILL.md
+    enabled: false       # 非虚构/学术/出版场景改为 true
+    role: qa
+    note: 事实核查与版权隐私风险排查
+
+  - name: token-thrifty
+    path: skills/token-thrifty/SKILL.md
+    enabled: true
+    role: utility
+    note: 字数统计、抽取式摘要、项目 token 账与摘要覆盖率
+
+  - name: revision-advisor
+    path: skills/revision-advisor/SKILL.md
+    enabled: true
+    role: qa
+    note: 规则体检、可执行修改建议与唯一长段拆段补丁
+
+  - name: inspiration-interviewer
+    path: skills/inspiration-interviewer/SKILL.md
+    enabled: true
+    role: production
+    note: 逐题访谈、回答合成灵感卡并落库为 idea/dialog
+
+experts:
+  - name: 01-策划专家
+    path: experts/01-策划专家.md
+    enabled: true
+    stage: [立项]
+  - name: 02-架构专家
+    path: experts/02-架构专家.md
+    enabled: true
+    stage: [总纲, 卷纲, 章纲]
+  - name: 03-写作专家
+    path: experts/03-写作专家.md
+    enabled: true
+    stage: [写作]
+  - name: 04-审校专家
+    path: experts/04-审校专家.md
+    enabled: true
+    stage: [审校]
+  - name: 05-文风声线专家
+    path: experts/05-文风声线专家.md
+    enabled: true
+    stage: [审校, 写作]
+  - name: 06-事实与版权专家
+    path: experts/06-事实与版权专家.md
+    enabled: false       # 与 fact-copyright-guard 技能联动开启
+    stage: [审校]
+
+mcp:
+  server: mcp/longform_mcp/server.py
+  transport: stdio
+  data_dir: ./data          # SQLite 落盘位置（也可用环境变量 LONGFORM_DATA_DIR 覆盖）
+  profiles_dir: ./profiles  # 作品变体目录（也可用环境变量 LONGFORM_PROFILES_DIR 覆盖到任意位置）
+  tools:                    # 列出你希望暴露给模型的工具子集
+    - project_init
+    - project_list
+    - project_export
+    - project_delete
+    - bible_upsert
+    - bible_get
+    - bible_list
+    - bible_search
+    - timeline_add
+    - timeline_query
+    - foreshadow_add
+    - foreshadow_list
+    - foreshadow_resolve
+    - foreshadow_overdue
+    - chapter_save
+    - chapter_patch
+    - chapter_get
+    - chapter_list
+    - chapter_versions
+    - chapter_diff
+    - style_set
+    - style_get
+    - fact_add
+    - fact_set_status
+    - fact_list
+    - audit_log
+    - audit_list
+    - packet_assemble
+    - ledger_stats
+    - config_get
+    - config_set
+
+    # ---- 作品变体：独立文件夹微调 / 便于增删 / 指定本地保存目录 ----
+    - profile_list
+    - profile_get
+    - profile_create
+    - profile_delete
+    - profile_bind
+    - profile_set_export_dir
+    - chapter_export
+
+    # ---- 大纲四级流水线（总纲 → 卷纲 → 章纲 → 正文）与阶段化模型建议 ----
+    - outline_set
+    - outline_get
+    - outline_list
+    - outline_tree
+    - outline_next
+    - outline_brief
+    - outline_versions
+    - outline_delete
+    - outline_diff
+    - stage_advice
+
+    # ---- 素材库（可追溯来源）----
+    - material_add
+    - material_get
+    - material_update
+    - material_audit
+    - material_list
+    - material_delete
+
+    # ---- 逐段写作 ----
+    - section_save
+    - section_get
+    - section_list
+    - section_merge
+    - section_delete
+
+    # ---- 世界书与上下文 ----
+    - entity_meta_get
+    - entity_meta_set
+    - context_trace
+
+    # ---- 上下文估算与工作目录导出 ----
+    - context_estimate
+    - workspace_export
+
+    # ---- 运行环境设置 / 直接调用模型 / 知识库与 IMA / 摘要与故事状态 ----
+    - settings_get
+    - settings_set
+    - llm_generate
+    - kb_import
+    - kb_search
+    - kb_categories
+
+    # ---- 引用与素材：引证登记与验真 ----
+    - citation_add
+    - citation_verify
+    - citation_list
+    - ima_search
+    - ima_fetch
+    - summary_set
+    - summary_list
+    - story_state_set
+    - story_state_get
+    - story_state_list
+
+    # ---- 叙事工作台：合规预检 / OOC / 角色会诊 / 妙招 / AI 声明 ----
+    - compliance_check
+    - voice_check
+    - role_deck_list
+    - trick_list
+    - role_prompt
+    - trick_prompt
+    - review_chain_prompt
+    - ai_declaration
+
+    # ---- 叙事工作台 v1.6：章节树 / 体检 / 串声 / 图谱 / 预期 / 流水线 / 申诉 ----
+    - chapter_tree
+    - structure_check
+    - voice_cross_check
+    - ooc_check
+    - story_graph
+    - expectation_add
+    - expectation_list
+    - expectation_audit
+    - pipeline_status
+    - appeal_pack
+    - ima_catalog_search
+    - ima_export_scan
+    - ima_import_urls
+    - ima_upload
+
+    # ---- v1.10：字数统计 / 省 token / 修订建议 / 灵感访谈 ----
+    - word_stats
+    - chapter_digest
+    - token_audit
+    - revision_plan
+    - inspiration_interview
+    - inspiration_synthesize
+
+    # ---- 自动化与账本：单章流水线 / L0 检查 / 调用账本 ----
+    - run_start
+    - run_status
+    - run_list
+    - run_resume
+    - run_cancel
+    - run_batch_start
+    - run_batch_status
+    - run_batch_resume
+    - run_batch_cancel
+    - lint_check
+    - usage_report
+
+    # ---- 质量环：先 L0，再逐维评分与定向修复 ----
+    - loop_start
+    - loop_report
+    - loop_meta
+    - loop_meta_apply
+
+    # ---- 质量与文风：文风蒸馏（需要 3 篇/2000 字；apply 写项目 style，不改正文）----
+    - style_distill
+    - style_profile_get
+    - style_profile_apply
+    - style_blind_test
+
+    # ---- AI Studio 桥接：读取网页设置 / 导出提示词 / 导入设置补丁 ----
+    - studio_pack_get
+    - studio_pack_import
+    - studio_prompt
+
+    # ---- AI Studio 自驾：不配 API 时由 AI Studio 对话完成生成，系统校验后继续状态机 ----
+    - studio_next
+    - studio_submit
+    - studio_handoffs
+    - studio_design
+    - studio_cancel

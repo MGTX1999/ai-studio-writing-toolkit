@@ -1,0 +1,130 @@
+{
+  // ============================================================
+  // models.json —— 模型路由 + 阶段剧本
+  // ============================================================
+  // 文件虽叫 models.json，实为两块内容：
+  //   1. tiers  模型档位（planning / production / qa / utility）
+  //   2. stages 创作阶段的剧本（该用什么档位、叫哪个专家、调哪些工具、交什么）
+  //
+  // 【双写告警】tiers 段与 config/defaults.yaml 的 models: 段同源双写，
+  //   改一处必须改另一处。python scripts/check_config.py 会拦截漂移。
+  //   stages 段是 JSON 独有的，defaults.yaml 里没有对应项，不存在漂移。
+  //
+  // 【为什么用 JSON 而不是 YAML】标准库没有 YAML 解析器，而这个工具箱
+  //   坚持零第三方依赖。MCP 侧只读本文件；defaults.yaml 供人阅读与文档引用。
+  //
+  // 【占位符】name 里的 "your-*" 是占位符，请替换成你平台上的真实模型标识。
+  //   未替换时 stage_advice 会在 warnings 里提示，不会中断。
+
+  "version": 1,
+
+  "tiers": {
+    "planning": {                          // 大纲、结构、拆解：要强推理
+      "name": "your-strong-model",
+      "temperature": 0.4,
+      "max_output_tokens": 4000
+    },
+    "production": {                        // 正文扩写：要文风与篇幅
+      "name": "your-writing-model",
+      "temperature": 0.8,
+      "max_output_tokens": 8000
+    },
+    "qa": {                                // 审校、一致性检查：要严谨、低随机
+      "name": "your-strong-model",
+      "temperature": 0.2,
+      "max_output_tokens": 3000
+    },
+    "utility": {                           // 摘要、抽取、格式化：可用便宜模型
+      "name": "your-cheap-model",
+      "temperature": 0.1,
+      "max_output_tokens": 1500
+    }
+  },
+
+  "stages": {
+    "master": {
+      "tier": "planning",
+      "label": "总纲要",
+      "reason": "一锤定音的全局结构决策，改一次成本极高，要强推理",
+      "expert": "02-架构专家",
+      "skill": "outline-architect",
+      "tools": ["stage_advice", "outline_set", "outline_tree", "outline_next"],
+      "output_contract": {
+        "write_to": "outline_set(level='master', data={骨架,总章数,has_volumes,结局,主题})",
+        "required_fields": ["骨架", "总章数", "has_volumes", "结局"],
+        "gate": "结局未定 → 不得展开章纲",
+        "max_chars": 20000
+      }
+    },
+    "volume": {
+      "tier": "planning",
+      "label": "卷纲要",
+      "reason": "一卷的起承转合与章号区间，仍是结构决策",
+      "expert": "02-架构专家",
+      "skill": "outline-architect",
+      "tools": ["stage_advice", "outline_set", "outline_list", "outline_next"],
+      "output_contract": {
+        "write_to": "outline_set(level='volume', parent_id='master', seq=N, start_chapter, end_chapter, data={目标,转折点,收束})",
+        "required_fields": ["目标", "转折点", "收束"],
+        "gate": "区间必须连成 [1,总章数] 且互不重叠（outline_next.gaps 为空）",
+        "max_chars": 20000
+      }
+    },
+    "chapter": {
+      "tier": "planning",
+      "label": "章纲要",
+      "reason": "章纲决定正文的走向，写坏了正文全废，值得用好模型",
+      "expert": "02-架构专家",
+      "skill": "outline-architect",
+      "tools": ["stage_advice", "outline_set", "outline_brief", "outline_next"],
+      "output_contract": {
+        "write_to": "outline_set(level='chapter', parent_id=<卷 id>, chapter_n=N, body=<六要素>)",
+        "required_fields": ["chapter_n", "outcome", "change"],
+        "gate": "每章 outcome/change 非空；连续 3 章为空 → 打回",
+        "max_chars": 10000
+      }
+    },
+    "draft": {
+      "tier": "production",
+      "label": "正文",
+      "reason": "长文扩写，要文风稳定与篇幅控制，随机性可以高一点",
+      "expert": "03-写作专家",
+      "skill": "chapter-writer",
+      "tools": ["outline_brief", "packet_assemble", "chapter_save"],
+      "output_contract": {
+        "write_to": "chapter_save(n, title, content, status)",
+        "required_fields": ["content"],
+        "gate": "字数落在 [chapter.min_words, chapter.max_words] 内",
+        "max_chars": 200000
+      }
+    },
+    "qa": {
+      "tier": "qa",
+      "label": "审校",
+      "reason": "一致性核查，要严谨、低随机，避免为了'好看'改坏事实",
+      "expert": "04-审校专家",
+      "skill": "consistency-auditor",
+      "tools": ["audit_log", "chapter_diff", "foreshadow_overdue", "fact_list"],
+      "output_contract": {
+        "write_to": "audit_log(chapter_n, report)",
+        "required_fields": ["issues"],
+        "gate": "命中 audit.block_on 任一项 → 打回重修",
+        "max_chars": 3000
+      }
+    },
+    "utility": {
+      "tier": "utility",
+      "label": "杂务",
+      "reason": "摘要、抽取、格式化这类机械活，便宜模型足够",
+      "expert": null,
+      "skill": null,
+      "tools": ["ledger_stats", "project_export", "chapter_export"],
+      "output_contract": {
+        "write_to": "（无产物，或导出到变体的 export 目录）",
+        "required_fields": [],
+        "gate": "只读操作不得改动权威数据",
+        "max_chars": 1500
+      }
+    }
+  }
+}

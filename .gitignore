@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+data/
+profiles/*/exports/
+settings.json
+.backup/
+webui/*.log
+.pytest_cache/

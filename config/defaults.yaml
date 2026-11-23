@@ -1,0 +1,120 @@
+# ============================================================
+# defaults.yaml —— 可调参数（MCP 进程启动时真正读取）
+#
+# 配置优先级（高 → 低）：
+#   工具参数 > 变体 overrides > 项目 config_json（config_set）> 本文件 > 代码内默认值
+#
+# 【代码真正消费的键】
+#   models            —— 仅作 config/models.json 的同源副本，由 check_config.py 比对；
+#                        MCP 读的是 models.json
+#   packet.*          —— 输入包预算/小节开关/召回策略
+#   chapter.tail_words —— 上章结尾引用字数
+#   audit.foreshadow_overdue_after —— 伏笔逾期判据
+#   style.*           —— 文风基础层（被 style 表与项目/变体配置依次覆盖）
+#   output.export_format / output.save_every_version —— 导出格式与是否保留每版
+#
+# 【仅供技能与阶段剧本引用的键】（MCP 不做运行时强制）
+#   chapter.target_words / min_words / max_words / max_revision_rounds
+#   audit.strictness / block_on / warn_only / require_human_signoff
+#   facts.*、output.autosave_interval_chapters
+# ============================================================
+
+version: 1
+
+# ---------- 模型路由 ----------
+# 不同环节用不同档位的模型，省钱且提质。
+# 若你的平台只有一个模型，全部填同一个名字即可。
+#
+# ⚠ 双写告警：本段与 config/models.json 的 tiers 段同源双写。
+#   MCP 代码读的是 models.json（标准库没有 YAML 解析器），改这里必须同步改那边。
+#   跑 `python scripts/check_config.py` 可拦截漂移（退出码非 0 即不一致）。
+#
+# 阶段剧本（每阶段用哪个档位、找哪个专家、调哪些工具）只在 models.json 的
+# stages 段里，本文件没有对应项，不存在漂移。
+models:
+  planning:                # 大纲、结构、拆解：要强推理
+    name: "your-strong-model"
+    temperature: 0.4
+    max_output_tokens: 4000
+  production:              # 正文扩写：要文风与篇幅
+    name: "your-writing-model"
+    temperature: 0.8
+    max_output_tokens: 8000
+  qa:                      # 审校、一致性检查：要严谨、低随机
+    name: "your-strong-model"
+    temperature: 0.2
+    max_output_tokens: 3000
+  utility:                 # 摘要、抽取、格式化：可用便宜模型
+    name: "your-cheap-model"
+    temperature: 0.1
+    max_output_tokens: 1500
+
+# ---------- 章节默认规格 ----------
+chapter:
+  target_words: 2500           # 单章目标字数（网文可 2000-3000，出版可 4000-6000）
+  min_words: 1500
+  max_words: 4000
+  tail_words: 300              # 引用上一章结尾的字数，保证衔接
+  max_revision_rounds: 3       # 单章最多修订轮数，超过则升级人工介入
+
+# ---------- 上下文输入包 ----------
+packet:
+  token_budget: 12000          # 输入包总预算（约 4 字符 ≈ 1 token）
+  include_style_profile: true
+  include_timeline: true
+  timeline_lookback_chapters: 5   # 回溯多少章的时间线事件
+  include_open_foreshadow: true
+  foreshadow_due_window: 3        # 预留：当前代码未消费（应收未收只看 due_chapter）
+  include_facts: true
+  entity_match: keyword          # keyword | all | embedding（embedding 需自行扩展）
+  # 前情摘要：用阶段性摘要替代整章正文，是长篇省 token 的主要手段
+  include_summaries: true        # 是否在输入包中携带「前情摘要」小节
+  summary_lookback_chapters: 10  # 回看多少章的摘要（0 = 不携带）
+  summary_max_chars: 1200        # 摘要小节总字数上限，超出按行裁剪
+  # 故事状态：六类状态文件中真正影响下一章连贯性的几份
+  include_story_state: true      # 是否在输入包中携带「故事状态」小节
+  story_state_keys: [character-state, next-hook, arc-status]
+  # 章节素材包：按细纲/实体/本章素材召回，E2+ 才可作事实，E0/E1 只作线索
+  include_materials: true        # 是否在输入包中携带「本章素材与参考」小节
+  material_limit: 4              # 最多带入几条可用素材（E2/E3）
+  material_budget_ratio: 0.12    # 素材小节最多占总预算的比例（0.0–0.5）
+  material_max_chars: 0          # 素材小节硬上限；0=按 ratio 自动计算
+  material_min_evidence: E2      # E0 | E1 | E2 | E3，越高越保守
+  material_clue_limit: 2         # 最多带几条 E0/E1 待读线索
+  material_max_queries: 12       # 每章最多生成多少个检索词
+
+# ---------- 一致性审计 ----------
+audit:
+  strictness: normal             # lenient | normal | strict
+  block_on:                      # 命中即打回修改
+    - character_attribute_conflict
+    - timeline_contradiction
+    - dead_character_appears
+  warn_only:                     # 记录但可通过
+    - style_drift
+    - pacing_issue
+    - unresolved_foreshadow_overdue
+  foreshadow_overdue_after: 8    # 埋下 N 章后仍未回收 → 逾期警告
+  require_human_signoff: true    # 每章最终需人工签署才进入下一章
+
+# ---------- 文风默认值 ----------
+style:
+  pov: "第三人称限知"
+  tense: "过去时"
+  tone: "克制、具象、少形容词"
+  sentence_length: "中短句为主，长句不超过 40 字"
+  dialogue_ratio: 0.35           # 对话占比目标区间 [0.3, 0.45]
+  banned_words: []               # 禁用词表，例如 ["宛如","不由得"]
+  register: "通用书面语"
+
+# ---------- 事实与版权 ----------
+facts:
+  require_source_for: [nonfiction, academic]   # 这些类型强制要求来源
+  citation_style: "apa"                        # apa | mla | chicago | footnote
+  similarity_alert_threshold: 0.15             # 与素材重复率超过则提示复核（人工判断）
+
+# ---------- 输出与归档 ----------
+output:
+  save_every_version: false      # true = 每版各留一份（文件名带 _vN），false = 覆盖同名文件
+  export_format: "md"            # md | txt（json / jsonl 请用 project_export）
+  autosave_interval_chapters: 1  # 预留：当前代码未消费
